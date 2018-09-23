@@ -1,6 +1,7 @@
 package br.com.sendgerson.mqttpoc;
 
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.util.Log;
@@ -8,6 +9,7 @@ import android.view.View;
 import android.widget.Toast;
 
 import org.eclipse.paho.android.service.MqttAndroidClient;
+import org.eclipse.paho.client.mqttv3.DisconnectedBufferOptions;
 import org.eclipse.paho.client.mqttv3.IMqttActionListener;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.IMqttToken;
@@ -23,7 +25,7 @@ public class MainActivity extends AppCompatActivity {
     private static final String TAG = "mqttpoc";
     private static final String SERVER_URI = "tcp://broker.hivemq.com:1883";
     private static final String CLIENT_ID = "sendgersontest";
-    private static final String TOPIC_PUBLISH = "sendgersontopic1";
+    private static final String TOPIC_PUBLISH = "sendgersontopic2";
     private static final String TOPIC_SUBSCRIBE = "sendgersontopic1";
     private static final int QOS = 1;
 
@@ -41,10 +43,10 @@ public class MainActivity extends AppCompatActivity {
                         publish();
                     }
                 }
-            );
+        );
     }
 
-    private void createClient(){
+    private void createClient() {
 
         try {
             MqttConnectOptions mqttConnectOptions = new MqttConnectOptions();
@@ -52,12 +54,14 @@ public class MainActivity extends AppCompatActivity {
             mqttConnectOptions.setCleanSession(false);
 
             client = new MqttAndroidClient(this.getApplicationContext(), SERVER_URI, CLIENT_ID);
-            client.connect(mqttConnectOptions, null, new IMqttActionListener() {
+            IMqttToken token = client.connect(mqttConnectOptions);
+            token.setActionCallback(new IMqttActionListener() {
                 @Override
                 public void onSuccess(IMqttToken asyncActionToken) {
                     // Connect successfully
+                    client.setBufferOpts(getDisconnectedBufferOptions());
                     Log.d(TAG, "onSuccess");
-                     buildMqttCallback();
+                    buildMqttCallback();
                     subscribeTopic();
                 }
 
@@ -72,7 +76,28 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void publish(){
+    @NonNull
+    private MqttConnectOptions getMqttConnectionOption() {
+        MqttConnectOptions mqttConnectOptions = new MqttConnectOptions();
+        mqttConnectOptions.setCleanSession(false);
+        mqttConnectOptions.setAutomaticReconnect(true);
+        //mqttConnectOptions.setWill(Constants.PUBLISH_TOPIC, "I am going offline".getBytes(), 1, true);
+        //mqttConnectOptions.setUserName("username");
+        //mqttConnectOptions.setPassword("password".toCharArray());
+        return mqttConnectOptions;
+    }
+    @NonNull
+    private DisconnectedBufferOptions getDisconnectedBufferOptions() {
+        // Offline opts
+        DisconnectedBufferOptions disconnectedBufferOptions = new DisconnectedBufferOptions();
+        disconnectedBufferOptions.setBufferEnabled(true);
+        disconnectedBufferOptions.setBufferSize(100);
+        disconnectedBufferOptions.setPersistBuffer(false);
+        disconnectedBufferOptions.setDeleteOldestMessages(false);
+        return disconnectedBufferOptions;
+    }
+
+    private void publish() {
         try {
             String payload = "test publish message";
             byte[] encodedPayload = payload.getBytes(StandardCharsets.UTF_8);
@@ -104,7 +129,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void buildMqttCallback(){
+    private void buildMqttCallback() {
         client.setCallback(new MqttCallbackExtended() {
             @Override
             public void connectComplete(boolean reconnect, String serverURI) {
@@ -112,6 +137,7 @@ public class MainActivity extends AppCompatActivity {
                 if (reconnect) {
                     Log.d(TAG, "reconnected");
                     // Because Clean Session is true, we need to re-subscribe
+                    subscribeTopic();
                 } else {
                     Log.d(TAG, "connected to");
                 }
@@ -135,7 +161,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    private void showMessageToast(String message){
+    private void showMessageToast(String message) {
         Toast.makeText(this, message, Toast.LENGTH_LONG).show();
     }
 
